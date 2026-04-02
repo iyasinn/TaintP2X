@@ -16,45 +16,61 @@ class FullyDeterminer:
         self.log_dir = log_dir
         self.llm_client = LLMClient(api_key=os.getenv("SILICONFLOW_API_KEY", ""))
         self.system_prompt = """
-您是一位专门识别代码中污点传播路径的软件安全专家。为了进行精确分析，您需要具备扎实的Python编程能力和污点流分析技能。
-现在，您的任务是检查一个开源项目（使用Python编写）中的函数是否存在污点传播。判断标准如下：
+You are a software security expert specializing in identifying taint propagation paths in code. For accurate analysis, you need strong Python programming skills and taint flow analysis abilities.
 
-1. 污点源：
-   - 任何用户可控的输入（如HTTP请求参数、用户上传的文件内容、命令行参数等）
-   - 敏感信息（如API密钥、数据库凭据、个人身份信息等）
+Your task is to examine functions in an open-source project (written in Python) for taint propagation. The criteria for determining taints are as follows:
 
-2. 污点汇聚点（Sink）：
-   - 代码执行函数（如eval(), exec(), os.system(), subprocess.run()等）
-   - 数据库操作函数（如SQL查询、ORM操作等）
-   - 文件操作函数（如open(), write(), read()等）
-   - 网络请求函数（如requests.get(), requests.post()等）
-   - 模板渲染函数（如Jinja2, Django templates等）
-   - 反序列化函数（如pickle.loads(), yaml.load()等）
+1. Source of Taint:
 
-3. 污点传播路径：
-   - 污点数据从源头流向汇聚点，期间可能经过多个函数调用、变量赋值、数据结构传递等。
-   - 污点数据在传播过程中未经过充分的净化或验证。
+- Any user-controlled input (e.g., HTTP request parameters, user-uploaded file content, command-line arguments, etc.)
 
-您需要分析给定的代码片段和调用链，判断是否存在污点传播，并说明污点源、传播路径和汇聚点。
+- Sensitive information (e.g., API keys, database credentials, personally identifiable information, etc.)
 
-请以以下JSON格式返回您的分析：
-{
-    "issue_number": <问题编号>,
-    "is_vulnerability": <true或false>,
-    "reason": "<为什么是或不是污点传播的原因>",
-    "triggering_conditions": "<如果是污点传播，描述其调用方式和参数>"
-}
-返回的"reason"和"triggering_conditions"内容需要使用中文。
-以下是您需要分析的可疑代码片段和调用链：
+2. Sink of Taints:
+
+- Code execution functions (e.g., eval(), exec(), os.system(), subprocess.run(), etc.)
+
+- Database operation functions (e.g., SQL queries, ORM operations, etc.)
+
+- File operation functions (e.g., open(), write(), read(), etc.)
+
+- Network request functions (e.g., requests.get(), requests.post(), etc.)
+
+- Template rendering functions (e.g., Jinja2, Django templates, etc.)
+
+- Deserialization functions (e.g., pickle.loads(), yaml.load(), etc.)
+
+3. Taint Propagation Path:
+
+- Tainted data flows from the source to the sink, potentially passing through multiple function calls, variable assignments, and data structure transfers.
+
+- The tainted data has not undergone sufficient cleansing or verification during its propagation.
+
+You need to analyze the given code snippet and call chain to determine if taint propagation exists, and describe the taint source, propagation path, and convergence point.
+
+Please return your analysis in the following JSON format:
+
+{ "issue_number": <issue number>,
+
+"is_vulnerability": <true or false>,
+
+"reason": "<the reason why it is or is not taint propagation>",
+
+"triggering_conditions": "<if it is taint propagation, describe its calling behavior and parameters>"
+
+} The returned "reason" and "triggering_conditions" content must use Chinese characters.
+
+Below is the suspicious code snippet and call chain you need to analyze:
 """
 
     def process_project(
         self, project_name, taint_output_file, source_determiner_log_dir
     ):
         """
-        处理项目的 taint-output.json，根据 SourceDeterminer 的结果进一步分析完整调用链。
+        Process a project's taint-output.json and further analyze full call chains
+        based on SourceDeterminer results.
         """
-        print(f"--- 开始 LLM Fully 验证: {project_name} ---")
+        print(f"--- Starting LLM Full validation: {project_name} ---")
 
         project_log_dir = os.path.join(self.log_dir, project_name)
         if not os.path.exists(project_log_dir):
@@ -81,13 +97,13 @@ class FullyDeterminer:
                         except:
                             pass
         except Exception as e:
-            print(f"读取 taint-output.json 失败: {e}")
+            print(f"Failed to read taint-output.json: {e}")
             return
 
         vulnerable_issues = self._get_vulnerable_issues(
             project_name, source_determiner_log_dir
         )
-        print(f"SourceDeterminer 确定的可疑 issue: {vulnerable_issues}")
+        print(f"Suspicious issues identified by SourceDeterminer: {vulnerable_issues}")
 
         for issue_num in vulnerable_issues:
             if issue_num < 1 or issue_num > len(issues):
@@ -122,9 +138,9 @@ class FullyDeterminer:
     def _extract_trace_chain(self, issue_data):
         chain = []
         try:
-            # 简化版 Trace 提取
+            # Simplified version of Trace extraction
             chain.append(f"Callable: {issue_data.get('data', {}).get('callable')}")
-            # 可以扩展更详细的 trace 提取
+            # Can be expanded to more detailed trace extraction
         except Exception as e:
             chain.append(f"Error extracting trace: {e}")
         return "\n".join(chain)
@@ -148,19 +164,19 @@ class FullyDeterminer:
             if "choices" in response_data and response_data["choices"]:
                 with open(response_file, "w") as f:
                     f.write(response_data["choices"][0]["message"]["content"])
-                print(f"DeepSeek 响应已保存: {response_file}")
+                print(f"DeepSeek response saved: {response_file}")
         except Exception as e:
-            print(f"LLM 交互出错: {e}")
+            print(f"LLM interaction error: {e}")
 
     def get_project_names_starting_with_a(self, base_path):
         """
-        获取指定目录下所有以 'a' 开头的项目名称。
-        :param base_path: 包含项目目录的根路径。
-        :return: 以 'a' 开头的项目名称列表。
+        Get all project names under the given directory that start with 'a'.
+        :param base_path: Root path containing project directories.
+        :return: Project names that start with 'a'.
         """
         project_names = []
         if not os.path.exists(base_path):
-            print(f"错误：路径 {base_path} 不存在。")
+            print(f"Error: path {base_path} does not exist.")
             return project_names
 
         for item in os.listdir(base_path):
@@ -171,20 +187,20 @@ class FullyDeterminer:
         return project_names
 
     def extract_method_by_line(self, file_path: str, target_line: int) -> str:
-        """根据指定行号提取整个方法内容"""
+        """Extract complete method content by target line number."""
         try:
             with open(file_path, "r") as file:
                 lines = file.readlines()
 
-            # 确保目标行在文件范围内
+            # Make sure the target line is within the file scope
             if target_line < 1 or target_line > len(lines):
-                return "目标行号超出文件范围"
+                return "Target line number is out of file range"
 
-            # 检查目标行是否为空行
+            # Check if the target row is an empty row
             if not lines[target_line - 1].strip():
-                return "目标行是空行"
+                return "Target line is blank"
 
-            # 向上查找方法开始
+            # The upward search method begins
             start_line = target_line - 1
             method_found = False
             while start_line >= 0:
@@ -193,26 +209,28 @@ class FullyDeterminer:
                     break
                 start_line -= 1
 
-            # 如果没有找到方法定义，返回上下文各5行
+            # If no method definition is found, return 5 lines each of the context
             if not method_found:
-                context_start = max(0, target_line - 6)  # -6是因为行号从1开始
+                context_start = max(
+                    0, target_line - 6
+                )  # 6 is because line numbers start from 1
                 context_end = min(
                     len(lines), target_line + 5
-                )  # +5是为了包含目标行后的5行
-                return f"目标行不在任何方法内部，显示上下文：\n" + "".join(
+                )  # +5 is to include the 5 lines after the target line
+                return f"Target line is not inside any method. Showing context:\n" + "".join(
                     lines[context_start:context_end]
                 )
 
-            # 向下查找方法结束（通过缩进判断）
+            # The end of the downward search method (judged by indentation)
             method_indent = len(lines[start_line]) - len(lines[start_line].lstrip())
             end_line = target_line
 
-            # 检查目标行的缩进是否属于该方法
+            # Check if the indentation of the target line belongs to the method
             target_line_content = lines[target_line - 1].rstrip()
-            if not target_line_content:  # 空行
+            if not target_line_content:  # blank line
                 context_start = max(0, target_line - 6)
                 context_end = min(len(lines), target_line + 5)
-                return f"目标行是空行，显示上下文：\n" + "".join(
+                return f"Target line is blank. Showing context:\n" + "".join(
                     lines[context_start:context_end]
                 )
 
@@ -220,39 +238,39 @@ class FullyDeterminer:
                 lines[target_line - 1].lstrip()
             )
             if target_indent <= method_indent:
-                # 如果目标行不在方法内部，返回上下文各5行
+                # If the target line is not inside the method, return 5 lines each of the context.
                 context_start = max(0, target_line - 6)
                 context_end = min(len(lines), target_line + 5)
-                return f"目标行不在任何方法内部，显示上下文：\n" + "".join(
+                return f"Target line is not inside any method. Showing context:\n" + "".join(
                     lines[context_start:context_end]
                 )
 
             while end_line < len(lines):
-                # 跳过空行
+                # Skip empty lines
                 if not lines[end_line].strip():
                     end_line += 1
                     continue
-                # 如果遇到同级或更低级的缩进，说明方法结束
+                # If an indentation of the same level or lower level is encountered, the method ends.
                 current_indent = len(lines[end_line]) - len(lines[end_line].lstrip())
                 if current_indent <= method_indent:
                     break
                 end_line += 1
 
-            # 提取方法内容
+            # Extract method content
             method_content = "".join(lines[start_line:end_line])
             return method_content
 
         except FileNotFoundError:
-            return "文件不存在"
+            return "File does not exist"
         except Exception as e:
-            return f"提取方法时出错：{str(e)}"
+            return f"Error extracting method: {str(e)}"
 
     def extract_vulnerable_issues(self, project_name):
-        # 获取所有 issue 的文件夹
+        # Get all issue folders
         base_dir = os.path.join(self.log_dir, project_name)
         vulnerable_issues = []
 
-        # 遍历实际存在的文件夹
+        # Traverse actual existing folders
         for item in os.listdir(base_dir):
             folder_path = os.path.join(base_dir, item)
             if not os.path.isdir(folder_path):
@@ -261,35 +279,35 @@ class FullyDeterminer:
             issue_number = int(item)
             response_file = os.path.join(folder_path, "response_output.json")
 
-            # 检查文件是否存在
+            # Check if the file exists
             if not os.path.exists(response_file):
                 continue
 
-            # 读取文件内容
+            # Read file contents
             with open(response_file, "r") as file:
                 try:
                     data = json.load(file)
-                    # 检查 is_vulnerability 是否为 true
+                    # Check if is_vulnerability is true
                     if data.get("is_vulnerability", False):
                         vulnerable_issues.append(issue_number)
                 except json.JSONDecodeError as e:
-                    print(f"解析 {response_file} 时出错：{e}")
+                    print(f"Error parsing {response_file}: {e}")
 
-        # 输出结果
+        # Output results
         if vulnerable_issues:
-            print("以下 issue 的 is_vulnerability 为 true：")
+            print("Issues with is_vulnerability=true:")
             for issue in vulnerable_issues:
                 print(f"Issue {issue}")
         else:
-            print("未找到 is_vulnerability 为 true 的 issue。")
+            print("No issues with is_vulnerability=true were found.")
 
         return vulnerable_issues
 
     def parse_trace_chain(self, log_file_path):
         """
-        解析 trace_chain.log 文件，提取每个 issue 的调用链信息。
-        :param log_file_path: trace_chain.log 文件的路径。
-        :return: 包含所有 issue 调用链信息的字典。
+        Parse trace_chain.log and extract call-chain information per issue.
+        :param log_file_path: Path to trace_chain.log.
+        :return: Dictionary containing call-chain info for all issues.
         """
         issues_trace_chains = {}
         current_issue = None
@@ -309,17 +327,17 @@ class FullyDeterminer:
                 if current_issue is not None:
                     issues_trace_chains[current_issue] = current_chain
         except FileNotFoundError:
-            print(f"错误：文件 {log_file_path} 未找到。")
+            print(f"Error: file {log_file_path} not found.")
         except Exception as e:
-            print(f"解析文件 {log_file_path} 时出错：{e}")
+            print(f"Error parsing file {log_file_path}: {e}")
 
         return issues_trace_chains
 
     def get_pure_function_name(self, full_function_name):
         """
-        从完整的函数名中提取纯函数名。
-        例如：'module.submodule.ClassName.method_name' -> 'method_name'
-        'module.function_name' -> 'function_name'
+        Extract plain function name from fully qualified function name.
+        Example: 'module.submodule.ClassName.method_name' -> 'method_name'
+                 'module.function_name' -> 'function_name'
         """
         return full_function_name.split(".")[-1]
 
@@ -327,7 +345,7 @@ class FullyDeterminer:
         self, function_name: str, project_path: str
     ) -> list:
         """
-        在项目中查找函数的具体实现
+        Find concrete function implementations in the project.
         """
         results = []
 
@@ -368,7 +386,7 @@ class FullyDeterminer:
                             )
 
                 except Exception as e:
-                    print(f"读取文件 {file_path} 时出错: {str(e)}")
+                    print(f"Error reading file {file_path}: {str(e)}")
 
         return results
 
@@ -376,16 +394,17 @@ class FullyDeterminer:
         self, analysis_results, trace_chain, project_name
     ) -> dict:
         """
-        获取分析中提到但未在调用链中出现的过滤函数的具体实现
+        Get concrete implementations of sanitizer functions mentioned in analysis
+        but not already present in the call chain.
 
         Args:
-            analysis_results: 分析结果列表
-            trace_chain: 调用链列表
+            analysis_results: list of analysis results
+            trace_chain: call-chain list
 
         Returns:
-            dict: 过滤函数名称及其实现的字典
+            dict: sanitizer function names mapped to implementations
         """
-        # 收集所有提到的过滤函数，但排除已经在调用链中的函数
+        # Collect all mentioned filter functions but exclude functions already in the call chain
         sanitizer_functions = set()
         existing_functions = {
             self.get_pure_function_name(call["function"]) for call in trace_chain
@@ -401,25 +420,27 @@ class FullyDeterminer:
                     if func not in existing_functions
                 )
 
-        # 查找过滤函数的具体实现
+        # Find the specific implementation of the filter function
         sanitizer_implementations = {}
         if sanitizer_functions:
-            print(f"\n发现以下过滤函数：{sanitizer_functions}")
+            print(f"\nDetected sanitizer functions: {sanitizer_functions}")
             project_path = os.path.join(self.project_base_path, project_name)
 
             for func_name in sanitizer_functions:
                 impls = self.find_function_implementation(func_name, project_path)
                 if impls:
-                    # 如果找到多个实现，使用第一个
+                    # If multiple implementations are found, the first one is used
                     sanitizer_implementations[func_name] = impls[0]["content"]
                     if len(impls) > 1:
-                        print(f"警告：函数 {func_name} 找到多个实现，使用第一个实现")
+                        print(
+                            f"Warning: multiple implementations found for {func_name}; using the first one"
+                        )
                         for i, impl in enumerate(impls, 1):
                             print(
-                                f"实现 #{i} 位于: {impl['file_path']}:{impl['line_number']}"
+                                f"Implementation #{i} at: {impl['file_path']}:{impl['line_number']}"
                             )
                 else:
-                    print(f"未找到函数 {func_name} 的实现")
+                    print(f"No implementation found for function {func_name}")
 
         return sanitizer_implementations
 
@@ -427,13 +448,13 @@ class FullyDeterminer:
         self, trace_chain: list, log_file: str, project_name
     ) -> dict:
         """
-        使用DeepSeek分析调用链并评估污点传播可靠性
+        Analyze call chain with DeepSeek and evaluate taint propagation reliability.
 
         Args:
-            trace_chain: 调用链列表
-            log_file: 原始调用链日志文件路径
+            trace_chain: call-chain list
+            log_file: path to raw call-chain log file
         """
-        # 检查 analysis_results.json 是否已存在
+        # Check if analysis_results.json already exists
         analysis_results_file = os.path.join(
             os.path.dirname(log_file), "analysis_results.json"
         )
@@ -441,22 +462,22 @@ class FullyDeterminer:
             os.path.exists(analysis_results_file)
             and os.path.getsize(analysis_results_file) > 0
         ):
-            print(f"文件 {analysis_results_file} 已存在且有内容，跳过分析。")
+            print(f"File {analysis_results_file} already exists with content; skipping analysis.")
             try:
                 with open(analysis_results_file, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
-                print(f"读取已存在的分析结果时出错: {str(e)}")
-                # 如果读取出错，继续进行新的分析
+                print(f"Error reading existing analysis results: {str(e)}")
+                # If a read error occurs, continue with a new analysis
 
-        # 读取原始调用链日志
+        # Read the original call chain log
         with open(log_file, "r") as f:
             output_log_content = f.read()
 
         analysis_results = []
-        print(f"\n开始分析调用链，共 {len(trace_chain)} 个函数...")
+        print(f"\nStarting call-chain analysis. Total functions: {len(trace_chain)}")
 
-        # 提取漏洞类型
+        # Extract vulnerability type
         vuln_type = None
         response_json = os.path.join(os.path.dirname(log_file), "response_output.json")
         if os.path.exists(response_json):
@@ -466,123 +487,157 @@ class FullyDeterminer:
                     if "vulnerability_types" in data:
                         vuln_type = data["vulnerability_types"]
             except Exception as e:
-                print(f"读取漏洞类型时出错: {str(e)}")
+                print(f"Error reading vulnerability types: {str(e)}")
 
-        # 根据漏洞类型添加特定提示
+        # Add specific tips based on vulnerability type
         type_specific_prompts = {
             "Code_Execution": """
-请特别关注以下几点：
-1. 是否存在命令拼接或eval类执行函数
-2. 命令参数是否经过严格过滤
-3. 是否使用了安全的命令执行方式
-4. 是否限制了可执行的命令范围
-5. 如果通过eval实现的命令执行，污点是否被限制为正确的json格式
-6. 污点可以控制的内容是否能影响命令或代码的执行，有些污点即使能传播到sink函数，也不能影响执行何种命令或代码的执行
-7. 对于sink点为subprocess.Popen时，要注意shell的值是否为True""",
-            "SQL_Injection": """
-请特别关注以下几点：
-1. SQL语句是否使用参数化查询
-2. 是否存在直接字符串拼接
-3. 是否对特殊字符进行转义
-4. 是否限制了SQL语句的类型""",
-            "File_Operation": """
-请特别关注以下几点：
-1. 文件路径是否进行了规范化处理
-2. 是否限制了文件操作的目录范围
-3. 是否存在路径穿越的可能
+Please pay special attention to the following points:
 
-然后你需要分析文件操作的类型是读取文件还是写入文件，这点很重要。
+1. Does it contain command concatenation or `eval`-like execution functions?
 
-对于写入文件的sink：
-1. 污点是否能同时控制文件路径和写入内容
-2. 如果污点只能控制其中一个（路径或内容），则不构成有效的漏洞利用
-3. 即使其他条件都满足，只要不满足同时控制路径和内容的条件，也必须判定为无效
+2. Are command parameters strictly filtered?
 
-对于读取文件的sink：
-1. 污点是否能控制文件路径，导致任意文件读取
-2. 是否对读取的文件路径进行了白名单校验
-3. 是否限制了可读取的文件类型和目录范围""",
-            "XSS": """
-请特别关注以下几点：
-1. 输出是否进行了HTML编码
-2. 是否使用了安全的模板引擎
-3. 是否对大模型的输出进行了严格的过滤""",
-            "SSRF": """
-1. 检查这些请求的目标地址是否可控，例如是否从用户输入、配置文件或环境变量中获取。
-2. 确认是否存在对内部网络资源（如内网IP、本地文件、内部服务）的访问。
-3. 评估是否存在绕过URL白名单或黑名单的技巧，例如使用特殊协议（file://, gopher://）、重定向或DNS重绑定。
-4. 检查是否存在对请求返回内容的处理，以判断是否可能导致信息泄露或进一步的攻击。
+3. Is a safe command execution method used?
+
+4. Is the scope of executable commands restricted?
+
+5. If command execution is implemented via `eval`, are taints restricted to correct JSON format?
+
+6. Can the content controlled by taints affect the execution of commands or code? Some taints, even if they propagate to the sink function, cannot affect the execution of any specific command or code.
+
+7. For sink points like `subprocess.Popen`, ensure the value of `shell` is True.
+
+
+"SQL_Injection":
+
+Please pay special attention to the following points:
+
+1. Does the SQL statement use parameterized queries?
+
+2. Does it contain direct string concatenation?
+
+3. Are special characters escaped?
+
+4. Are the types of SQL statements restricted?
+
+
+"File_Operation": 
+
+Please pay special attention to the following points:
+
+1. Are file paths normalized?
+
+2. Is the directory range for file operations restricted?
+
+3. Is path traversal possible?
+
+Then you need to analyze whether the file operation is reading or writing a file; this is crucial.
+
+For sinks that write files:
+
+1. Can the taint control both the file path and the content being written?
+
+2. If the taint can only control one of them (path or content), it does not constitute a valid exploit.
+
+3. Even if other conditions are met, if the condition of simultaneously controlling the path and content is not met, it must be deemed invalid.
+
+For sinks that read files:
+
+1. Can the taint control the file path, leading to arbitrary file reading?
+
+2. Is the file path being read whitelisted?
+
+3. Are the types of files and directories that can be read restricted?
+
+"XSS":  Please pay special attention to the following points:
+
+1. Is the output HTML encoded?
+
+2. Is a secure template engine used?
+
+3. Is the output of large models strictly filtered?
+
+"SSRF": 1. Check whether the target address of these requests is controllable, for example, whether it is obtained from user input, configuration files, or environment variables.
+
+2. Verify for any access to internal network resources (such as internal IP addresses, local files, and internal services).
+
+3. Evaluate for techniques that bypass URL whitelists or blacklists, such as using special protocols (file://, gopher://), redirects, or DNS rebinding.
+
 """,
         }
 
-        # 在函数开始处添加已分析函数集合
+        # Add a collection of analyzed functions at the beginning of the function
         analyzed_functions = set()
 
         for i, call in enumerate(trace_chain, 1):
-            # 只使用函数实现内容作为唯一标识
-            func_content = call.get("content", "函数实现不可见")
+            # Only use function implementation content as a unique identifier
+            func_content = call.get("content", "Function implementation unavailable")
 
-            # 如果已经分析过相同的函数实现，则跳过
+            # If the same function implementation has already been analyzed, skip
             if func_content in analyzed_functions:
-                print(f"\n[{i}/{len(trace_chain)}] 跳过重复函数: {call['function']}")
+                print(f"\n[{i}/{len(trace_chain)}] Skipping duplicate function: {call['function']}")
                 continue
 
-            print(f"\n[{i}/{len(trace_chain)}] 正在分析函数: {call['function']}")
+            print(f"\n[{i}/{len(trace_chain)}] Analyzing function: {call['function']}")
             analyzed_functions.add(func_content)
 
-            # 构建基础提示信息
-            base_prompt = f"""请分析以下调用链中的片段里的污点传播是否有效，请注意，污点源是由用户可控的大模型输出，
-在污点传播到sink函数的过程中，可能有过滤函数对污点进行消毒，对于这种过滤函数请你仔细判断污点是否能被消毒成功。
-对于污点流，你要分析流入sink函数的污点是否是source的大模型输出可控的，并且还要考虑污点是否有能力触发sink函数导致的漏洞。
-注意只需要具体分析片段中的内容。
+            # Build basic prompt information
+            base_prompt = f"""Analyze whether taint propagation is valid in the following call-chain segment.
+The taint source is user-controllable LLM output.
+During propagation to sink functions, sanitizer functions may be applied.
+Carefully evaluate whether sanitization is effective.
+For each taint flow, determine whether data reaching the sink remains controllable from the source,
+and whether that control can actually trigger the sink vulnerability.
+Only analyze the provided code segment.
 """
 
-            # 添加漏洞类型特定的提示
+            # Add vulnerability type specific hints
             if vuln_type and isinstance(vuln_type, list):
                 for vtype in vuln_type:
                     if vtype in type_specific_prompts:
                         base_prompt += "\n" + type_specific_prompts[vtype]
 
-            # 完整提示信息
+            # Complete prompt information
             prompt = (
                 base_prompt
                 + f"""
 
-请详细分析以下几点：
-1. 污点经过的每个函数的具体功能和调用意图
-2. 每个函数是如何处理和传递污点数据的
-3. 函数之间的调用关系和数据流转过程
-4. 是否存在对污点数据的校验或过滤
+Please provide a detailed analysis of:
+1. Functional role and call intent of each function in the taint path
+2. How each function processes and forwards tainted data
+3. Inter-function call relationships and dataflow transitions
+4. Whether validation or sanitization exists
 
-完整调用链信息：
+Full call-chain information:
 {output_log_content}
 
-具体调用链片段：
+Current call-chain segment:
 
-函数名: {call['function']}
-参数信息: {call['params']}
-函数实现:
-{call['content'] if 'content' in call else '函数实现不可见'}
+Function name: {call['function']}
+Parameter info: {call['params']}
+Function implementation:
+{call['content'] if 'content' in call else 'Function implementation unavailable'}
 
-请以JSON格式返回分析结果：
+Return analysis in JSON format:
 {{
-    "issue_number": <调用链编号>,
+    "issue_number": <call chain id>,
     "is_taint_valid": true/false,
     "has_sanitizer": true/false,
-    "sanitizer_functions": [<过滤函数名称列表>],
+    "sanitizer_functions": [<list of sanitizer function names>],
     "function_analysis": [
         {{
-            "function_name": <函数名>,
-            "purpose": <函数调用意图和功能（中文）>,
-            "taint_handling": <污点处理方式（中文）>
+            "function_name": <function name>,
+            "purpose": <function intent and role (Chinese)>,
+            "taint_handling": <taint handling method (Chinese)>
         }}
     ],
-    "analysis_reason": <有效或无效的原因（中文）>
+    "analysis_reason": <reason the flow is valid/invalid (Chinese)>
 }}
 """
             )
 
-            # 调用DeepSeek进行分析
+            # Call deep seek for analysis
             try:
                 messages = [{"role": "user", "content": prompt}]
                 response = self.llm_client.chat_completion(
@@ -601,7 +656,7 @@ class FullyDeterminer:
                 #     if message_content:
                 #         try:
                 #             extracted_analysis = json.loads(message_content)
-                #             print("--- LLM Call Analysis Extracted JSON ---")
+                #             print("---LLM Call Analysis Extracted JSON ---")
                 #             print(json.dumps(extracted_analysis, indent=4))
                 #             call.update(extracted_analysis)
                 #             analysis_results.append(call)
@@ -652,7 +707,7 @@ class FullyDeterminer:
                     )
 
             except Exception as e:
-                print(f"调用DeepSeek API时出错: {str(e)}")
+                print(f"Error calling DeepSeek API: {str(e)}")
                 analysis_results.append(
                     {"error": f"DeepSeek API call error: {str(e)}", **call}
                 )
@@ -663,7 +718,7 @@ class FullyDeterminer:
                     {
                         "role": "user",
                         "content": chain_prompt
-                        + "\n请务必以严格的JSON格式返回结果，不要包含任何其他文本或Markdown标记。确保JSON格式正确且可解析。",
+                        + "\nReturn strictly valid JSON only. Do not include extra text or Markdown. Ensure the JSON is parseable.",
                     }
                 ],
                 temperature=0,
@@ -680,14 +735,14 @@ class FullyDeterminer:
                 try:
                     final_analysis = json.loads(json_content)
                 except json.JSONDecodeError as je:
-                    print(f"JSON解析错误，原始内容：\n{json_content}")
-                    print(f"错误详情：{str(je)}")
+                    print(f"JSON parse error, raw content:\n{json_content}")
+                    print(f"Error details: {str(je)}")
                     final_analysis = {
                         "issue_number": os.path.basename(os.path.dirname(log_file)),
                         "is_vulnerability": False,
-                        "reason": "JSON解析错误，无法完成分析",
-                        "triggering_conditions": "无法确定",
-                        "poc": "无法生成",
+                        "reason": "JSON parse error, unable to complete analysis",
+                        "triggering_conditions": "Undetermined",
+                        "poc": "Cannot generate",
                     }
             else:
                 print(
@@ -696,27 +751,27 @@ class FullyDeterminer:
                 final_analysis = {
                     "issue_number": os.path.basename(os.path.dirname(log_file)),
                     "is_vulnerability": False,
-                    "reason": "LLM响应结构异常，无法完成分析",
-                    "triggering_conditions": "无法确定",
-                    "poc": "无法生成",
+                    "reason": "Unexpected LLM response structure, unable to complete analysis",
+                    "triggering_conditions": "Undetermined",
+                    "poc": "Cannot generate",
                 }
-                sys.exit(1)  # JSON解析错误也直接退出
+                sys.exit(1)  # Json parsing errors also exit directly
 
         except Exception as e:
-            print(f"调用 DeepSeek 进行综合分析时出错: {str(e)}")
+            print(f"Error calling DeepSeek for final analysis: {str(e)}")
             final_analysis = {
                 "issue_number": os.path.basename(os.path.dirname(log_file)),
                 "is_vulnerability": False,
-                "reason": f"DeepSeek API调用错误: {str(e)}",
-                "triggering_conditions": "无法确定",
-                "poc": "无法生成",
+                "reason": f"DeepSeek API call error: {str(e)}",
+                "triggering_conditions": "Undetermined",
+                "poc": "Cannot generate",
             }
 
-        # 构建输出JSON
+        # Build output json
         output_json = {
             "issue_id": os.path.basename(
                 os.path.dirname(log_file)
-            ),  # 从log_file路径提取issue_id
+            ),  # Extract issue id from log file path
             "trace_chain": trace_chain,
             "analysis": {
                 "individual_analysis": analysis_results,
@@ -724,14 +779,14 @@ class FullyDeterminer:
             },
         }
 
-        # 输出JSON结果
+        # Output json result
         output_file = os.path.join(os.path.dirname(log_file), "analysis_results.json")
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(output_json, f, ensure_ascii=False, indent=2)
 
-        print(f"分析结果已保存到: {output_file}")
+        print(f"Analysis results saved to: {output_file}")
 
         return {
             "individual_analysis": analysis_results,
