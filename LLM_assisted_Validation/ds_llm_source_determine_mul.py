@@ -187,8 +187,9 @@ Below is the suspicious code snippet and call chain to analyze:
         os.makedirs(folder_path, exist_ok=True)
         print(f"Folder created or already exists: {folder_path}")
 
-    def run_test_script(self, project_name):
+    def run_test_script(self, project_name, issue_number=1):
         test_script_path = os.path.join(os.path.dirname(__file__), "test.sh")
+        project_work_dir = os.path.join(self.project_base_path, project_name)
         try:
             print(f"Running test.sh to generate logs for project {project_name}...")
 
@@ -196,9 +197,16 @@ Below is the suspicious code snippet and call chain to analyze:
             output_dir = os.path.join(self.log_dir, project_name)
             self.create_folder(output_dir)
 
-            # Run script with project_name only
+            # Run script with required arguments:
+            # <work_dir> <issue_number> <project_name>
             result = subprocess.run(
-                [test_script_path, project_name],
+                [
+                    "bash",
+                    test_script_path,
+                    project_work_dir,
+                    str(issue_number),
+                    project_name,
+                ],
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -206,11 +214,26 @@ Below is the suspicious code snippet and call chain to analyze:
             )
 
             print(f"test.sh completed successfully, check logs under {output_dir}.")
+            if result.stdout and result.stdout.strip():
+                print("--- test.sh stdout ---")
+                print(result.stdout.strip())
+            if result.stderr and result.stderr.strip():
+                print("--- test.sh stderr ---")
+                print(result.stderr.strip())
+            return True
 
         except subprocess.CalledProcessError as e:
-            print(f"test.sh failed! Error: {(e.stderr or '').strip()}")
+            print(f"test.sh failed (exit={e.returncode}).")
+            if e.stdout and e.stdout.strip():
+                print("--- test.sh stdout ---")
+                print(e.stdout.strip())
+            if e.stderr and e.stderr.strip():
+                print("--- test.sh stderr ---")
+                print(e.stderr.strip())
+            return False
         except Exception as e:
             print(f"Error while running script: {str(e)}")
+            return False
 
     def extract_file_paths_and_lines(self, input_file, output_file=None):
         try:
